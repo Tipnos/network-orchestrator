@@ -1,0 +1,94 @@
+name: network-orchestrator-sandbox
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        UID: ${HOST_UID:-1000}
+    command: sleep infinity
+    # Internal network only: no route to the internet except through the proxy.
+    networks: [sandbox]
+    volumes:
+      # Only the worktrees and .git are mounted, never the main checkout.
+      # Worktrees use relative paths, so any shared parent dir works.
+      - ../.worktrees:/workspace/.worktrees
+      - ../.git:/workspace/.git
+      # Hooks and config run commands on the host: read-only.
+      - ../.git/hooks:/workspace/.git/hooks:ro
+      - ../.git/config:/workspace/.git/config:ro
+      - cargo-target:/home/dev/target
+      - cargo-registry:/usr/local/cargo/registry
+      - agent-home:/home/dev/.claude
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/app
+      PGHOST: db
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: app
+      # .git/config is read-only, so the identity comes from the environment.
+      GIT_AUTHOR_NAME: ${GIT_AUTHOR_NAME:-dev}
+      GIT_AUTHOR_EMAIL: ${GIT_AUTHOR_EMAIL:-dev@localhost}
+      GIT_COMMITTER_NAME: ${GIT_AUTHOR_NAME:-dev}
+      GIT_COMMITTER_EMAIL: ${GIT_AUTHOR_EMAIL:-dev@localhost}
+      CLAUDE_CONFIG_DIR: /home/dev/.claude
+      HTTP_PROXY: http://proxy:3128
+      HTTPS_PROXY: http://proxy:3128
+      http_proxy: http://proxy:3128
+      https_proxy: http://proxy:3128
+      NO_PROXY: localhost,127.0.0.1,db
+      no_proxy: localhost,127.0.0.1,db
+      # ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      db:
+        condition: service_healthy
+      proxy:
+        condition: service_healthy
+
+  # The only service with internet access; filters by hostname.
+  proxy:
+    build: ./proxy
+    restart: unless-stopped
+    networks: [sandbox, egress]
+    volumes:
+      - ./allowed-domains.txt:/allowed-domains.txt:ro
+    # TCP connect rather than HTTP, so it doesn't pollute the access log.
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 3128"]
+      interval: 15s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    networks: [sandbox]
+    # Weak password is fine: the port is not published.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+networks:
+  # No gateway (v4 or v6) and no external DNS.
+  sandbox:
+    internal: true
+  egress: {}
+
+volumes:
+  cargo-target:
+  cargo-registry:
+  agent-home:
+  pgdata:

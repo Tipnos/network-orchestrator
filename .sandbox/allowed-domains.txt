@@ -1,0 +1,20 @@
+# Egress allowlist, matched by hostname. One entry per line.
+#   crates.io    exact host
+#   .crates.io   domain and all subdomains
+# Apply with: just sandbox::proxy-reload
+
+# Rust crates
+.crates.io
+
+# Claude Code (API, login, telemetry)
+.anthropic.com
+.claude.ai
+.claude.com
+
+# npm (updating Claude Code)
+.npmjs.org
+
+# GitHub
+.github.com
+.githubusercontent.com
+.github.io
