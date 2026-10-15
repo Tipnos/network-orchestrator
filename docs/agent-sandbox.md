@@ -15,10 +15,30 @@ host.
 |---|---|---|
 | `app` | `sandbox` | Where agents run. User `dev` (your UID), `cap_drop: ALL`, `no-new-privileges`. |
 | `proxy` | `sandbox`, `egress` | squid. Allows `CONNECT` only to hosts in `allowed-domains.txt`. TLS is not decrypted. |
-| `db` | `sandbox` | Postgres 16, port not published. |
+| `nats` | `sandbox` | NATS 2.15 with JetStream, one account per feature, ports not published. |
 
 `sandbox` is an `internal` Docker network: no gateway (IPv4 or IPv6) and no
 external DNS. `proxy` is the only service that can reach the internet.
+
+## NATS accounts
+
+Each feature gets its own NATS account, so agents don't see each other's
+subjects, streams or KV stores. Accounts are defined on the host, in
+`.sandbox/nats/` (mounted read-only into `nats`, not visible to `app`):
+
+- `nats-server.conf`: the server config, committed.
+- `accounts.d/<account>`: one file per account holding its password, created
+  by `agent-feature`. Git-ignored.
+- `accounts.conf`: generated from `accounts.d/` by `accounts.sh`. Git-ignored.
+
+`agent-feature` writes the password, regenerates `accounts.conf` and sends
+`SIGHUP` to `nats`, which reloads its config without a restart. It then sets
+`NATS_URL=nats://<account>:<password>@nats:4222` for that agent. A client
+without credentials (a plain `shell`, for instance) lands in the `shared`
+account.
+
+The passwords guard against mistakes, not against a hostile agent: all agents
+run as the same user, so one can read another's environment.
 
 ## Filesystem
 
@@ -33,7 +53,7 @@ external DNS. `proxy` is the only service that can reach the internet.
   host. So `git config`, `git remote` and `git push` are done on the host, and
   the git identity is passed in as `GIT_AUTHOR_*` / `GIT_COMMITTER_*`.
 - Volumes: `cargo-target`, `cargo-registry`, `agent-home` (Claude login, via
-  `CLAUDE_CONFIG_DIR`), `pgdata`.
+  `CLAUDE_CONFIG_DIR`), `nats-data` (JetStream storage).
 
 ## Commands
 
@@ -41,17 +61,19 @@ external DNS. `proxy` is the only service that can reach the internet.
 
 - `up`, `down`, `clean` (also deletes volumes), `rebuild`, `status`
 - `shell [feature]`
-- `agent-feature <feature> [db]`: creates on first use the worktree and branch
-  `<feature>`, the database `app_<feature>` (pass `app` to use the shared
-  one) and a cargo target dir, then launches `claude` there.
-- `agent-feature-clean <feature> [db] [force]`: removes all of it. Without
-  `force`, it stops on uncommitted changes and keeps unmerged branches.
-- `db-new`, `db-drop`, `db-list`
+- `agent-feature <feature>`: creates on first use the worktree and branch
+  `<feature>`, the NATS account `<feature>` (with `.` and `-` turned into
+  `_`) and a cargo target dir, then launches `claude` there.
+- `agent-feature-clean <feature> [force]`: removes all of it, deleting the
+  account's streams first. Without `force`, it stops on uncommitted changes
+  and keeps unmerged branches.
+- `nats <feature|shared> <args>`: runs the `nats` CLI as that account.
+  `nats-accounts` lists accounts.
 - `proxy-reload` (after editing the allowlist), `proxy-logs`, `egress-check`
 - `doctor`
 
-`just app::...` (anywhere): `build`, `check`, `test`, `lint`, `fmt`,
-`migrate`, `ci`, etc.
+`just app::...` (anywhere): `build`, `check`, `test`, `lint`, `fmt`, `ci`,
+etc.
 
 ## Threat model
 
@@ -63,6 +85,8 @@ It protects against:
 
 It does not protect against:
 - agents touching each other's worktrees or refs
+- agents reaching another feature's NATS account on purpose (see
+  [NATS accounts](#nats-accounts))
 - data leaving through allowed hosts
 - domain fronting, since filtering is by `CONNECT` hostname only
 - `ANTHROPIC_API_KEY` being visible inside the container

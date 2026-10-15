@@ -7,10 +7,26 @@ ARG UID=1000
 
 # Node is only needed to run Claude Code.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      curl ca-certificates ripgrep jq less postgresql-client \
+      curl ca-certificates ripgrep jq less \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# NATS CLI, from the release .deb.
+ARG NATSCLI_VERSION=0.5.0
+ARG NATSCLI_SHA256_amd64=d2f4c8c59da82c913a8e04c59975336f5f5e693a54a5c43d763aee32997a79ee
+ARG NATSCLI_SHA256_arm64=53898277826ffbea1ce72204c183e073b7fe77936d05945a46f47beec351b9a8
+RUN arch="$(dpkg --print-architecture)" \
+    && case "$arch" in \
+         amd64) sha="${NATSCLI_SHA256_amd64}" ;; \
+         arm64) sha="${NATSCLI_SHA256_arm64}" ;; \
+         *) echo "unsupported arch $arch" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSLo /tmp/nats.deb \
+      https://github.com/nats-io/natscli/releases/download/v${NATSCLI_VERSION}/nats-${NATSCLI_VERSION}-${arch}.deb \
+    && echo "${sha}  /tmp/nats.deb" | sha256sum -c - \
+    && dpkg -i /tmp/nats.deb \
+    && rm /tmp/nats.deb
 
 # Git >= 2.48 is required to read relative worktree paths. Debian ships older,
 # so build it from the release tarball (build deps are in the base image).
@@ -36,7 +52,6 @@ ENV CARGO_TARGET_DIR=/home/${USERNAME}/target
 USER ${USERNAME}
 
 RUN rustup component add rustfmt clippy rust-analyzer \
-    && cargo install sqlx-cli --no-default-features --features rustls,postgres \
     && cargo install just --locked \
     && npm config set prefix /home/${USERNAME}/.npm-global \
     && npm install -g @anthropic-ai/claude-code

@@ -1,2 +1,5 @@
 /target
 .worktrees/
+# Generated NATS accounts and passwords.
+.sandbox/nats/accounts.d/
+.sandbox/nats/accounts.conf

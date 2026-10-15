@@ -1,8 +1,9 @@
-# sandbox.just — host-side: lifecycle, feature agents, databases, egress.
+# sandbox.just — host-side: lifecycle, feature agents, NATS, egress.
 # Run from your host shell as `just sandbox::<recipe>`.
 
 dc := "docker compose -f " + justfile_directory() / ".sandbox/compose.yml"
 worktrees := justfile_directory() / ".worktrees"
+nats_dir := justfile_directory() / ".sandbox/nats"
 
 # Read by compose.yml.
 export HOST_UID := `id -u`
@@ -17,18 +18,21 @@ up:
     mkdir -p {{worktrees}}
     # Relative worktree paths, so the container can mount them anywhere.
     git config worktree.useRelativePaths true
+    {{nats_dir}}/accounts.sh
     {{dc}} up -d --build --wait
 
-# Stop, keeping volumes (db, caches, Claude login).
+# Stop, keeping volumes (NATS data, caches, Claude login).
 down:
     {{dc}} down
 
-# Stop and delete all volumes.
+# Stop and delete all volumes, and the NATS accounts that pointed into them.
 clean:
     {{dc}} down -v
+    rm -rf {{nats_dir}}/accounts.d {{nats_dir}}/accounts.conf
 
 # Rebuild images without cache, then restart.
 rebuild:
+    {{nats_dir}}/accounts.sh
     {{dc}} build --no-cache
     {{dc}} up -d --wait
 
@@ -42,14 +46,13 @@ shell feature="":
     {{dc}} exec -w /workspace/.worktrees/{{feature}} app bash
 
 # Launch Claude on a feature. Creates on first use: worktree + branch
-# <feature>, database app_<feature> (or `db`; `app` = shared), and a cargo
-# target dir. Undo with agent-feature-clean.
-agent-feature feature db="": up
+# <feature>, NATS account <feature> (`.`/`-` become `_`) and a cargo target
+# dir. Undo with agent-feature-clean.
+agent-feature feature: up
     #!/usr/bin/env bash
     set -euo pipefail
     wt="{{feature}}"
     [[ "$wt" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "Invalid feature name '$wt'" >&2; exit 1; }
-    db="{{db}}"; [ -n "$db" ] || db="app_${wt//-/_}"
 
     if [ ! -d "{{worktrees}}/$wt" ]; then
         if git show-ref --verify --quiet "refs/heads/$wt"; then
@@ -59,31 +62,36 @@ agent-feature feature db="": up
         fi
     fi
 
-    exists=$({{dc}} exec -T app psql -tAc "SELECT 1 FROM pg_database WHERE datname = '$db'")
-    if [ "$exists" != "1" ]; then
-        echo "Creating database $db"
-        {{dc}} exec -T app psql -qc "CREATE DATABASE \"$db\""
+    acct="${wt//[.-]/_}"
+    pw_file="{{nats_dir}}/accounts.d/$acct"
+    if [ ! -f "$pw_file" ]; then
+        echo "Creating NATS account $acct"
+        od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$pw_file"
+        {{nats_dir}}/accounts.sh
+        {{dc}} kill -s HUP nats >/dev/null
     fi
 
     {{dc}} exec -w "/workspace/.worktrees/$wt" \
         -e CARGO_TARGET_DIR="/home/dev/target/$wt" \
-        -e DATABASE_URL="postgres://postgres:postgres@db:5432/$db" \
+        -e NATS_URL="nats://$acct:$(cat "$pw_file")@nats:4222" \
         app claude
 
-# Remove a feature's worktree, branch, database and target dir.
+# Remove a feature's worktree, branch, NATS account (and its streams) and
+# target dir.
 # Stops on uncommitted changes and keeps unmerged branches unless `force`.
-#   just sandbox::agent-feature-clean feature-a [db] [force]
-agent-feature-clean feature *opts:
+#   just sandbox::agent-feature-clean feature-a [force]
+agent-feature-clean feature force="":
     #!/usr/bin/env bash
     set -euo pipefail
     wt="{{feature}}"
     [[ "$wt" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "Invalid feature name '$wt'" >&2; exit 1; }
     path="{{worktrees}}/$wt"
-    db="app_${wt//-/_}"
     force=""
-    for opt in {{opts}}; do
-        if [ "$opt" = "force" ]; then force=1; else db="$opt"; fi
-    done
+    case "{{force}}" in
+        "") ;;
+        force) force=1 ;;
+        *) echo "Unknown option '{{force}}' (expected 'force')" >&2; exit 1 ;;
+    esac
 
     if [ -d "$path" ]; then
         if [ -n "$force" ]; then
@@ -101,28 +109,41 @@ agent-feature-clean feature *opts:
     fi
 
     if ! {{dc}} exec -T app true 2>/dev/null; then
-        echo "Sandbox not running: skipped database '$db' and target dir." >&2
+        echo "Sandbox not running: skipped NATS account and target dir." >&2
         exit 0
     fi
-    if [ "$db" = "app" ]; then
-        echo "Not dropping the shared 'app' database"
-    else
-        {{dc}} exec -T app psql -qc "DROP DATABASE IF EXISTS \"$db\" WITH (FORCE)"
+    acct="${wt//[.-]/_}"
+    pw_file="{{nats_dir}}/accounts.d/$acct"
+    if [ "$acct" = "shared" ]; then
+        echo "Not removing the shared NATS account"
+    elif [ -f "$pw_file" ]; then
+        # Delete the streams (KV and object stores included) first, otherwise
+        # their files stay in the volume with no account to reach them.
+        url="nats://$acct:$(cat "$pw_file")@nats:4222"
+        for s in $({{dc}} exec -T -e NATS_URL="$url" app nats stream ls --names); do
+            {{dc}} exec -T -e NATS_URL="$url" app nats stream rm -f "$s"
+        done
+        rm "$pw_file"
+        {{nats_dir}}/accounts.sh
+        {{dc}} kill -s HUP nats >/dev/null
     fi
     {{dc}} exec -T app rm -rf "/home/dev/target/$wt"
 
-# --- Databases ---------------------------------------------------------
+# --- NATS --------------------------------------------------------------
 
-# Create app_<name>.
-db-new name:
-    {{dc}} exec -T app psql -c 'CREATE DATABASE "app_{{replace(name, "-", "_")}}"'
+# Run the nats CLI as a feature's account (`shared` for the shared one),
+# e.g. `just sandbox::nats feature-a stream ls`.
+nats feature *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    acct="$(echo "{{feature}}" | tr '.-' '__')"
+    pw_file="{{nats_dir}}/accounts.d/$acct"
+    [ -f "$pw_file" ] || { echo "No NATS account '$acct'" >&2; exit 1; }
+    {{dc}} exec -e NATS_URL="nats://$acct:$(cat "$pw_file")@nats:4222" app nats {{args}}
 
-# Drop app_<name>.
-db-drop name:
-    {{dc}} exec -T app psql -c 'DROP DATABASE IF EXISTS "app_{{replace(name, "-", "_")}}"'
-
-db-list:
-    {{dc}} exec -T app psql -c '\l'
+# List NATS accounts.
+nats-accounts:
+    @ls {{nats_dir}}/accounts.d
 
 # --- Egress ------------------------------------------------------------
 
@@ -151,7 +172,7 @@ egress-check:
     expect "other domain refused (https)"     "$([ "$(code https://example.com)" != 200 ] && echo 1)"
     expect "no direct egress"                 "$([ "$(code --noproxy '*' https://api.github.com/zen)" = 000 ] && echo 1)"
     expect "no external DNS"                  "$(run getent hosts example.com >/dev/null || echo 1)"
-    expect "internal names resolve"           "$(run getent hosts db >/dev/null && echo 1)"
+    expect "internal names resolve"           "$(run getent hosts nats >/dev/null && echo 1)"
 
     [ "$fail" = 0 ] || exit 1
 

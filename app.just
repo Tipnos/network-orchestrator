@@ -1,7 +1,6 @@
 # app.just — project commands (build, test, lint, migrate). No sandbox
 # awareness: you and the agent run the same `just app::ci`.
-# DATABASE_URL comes from the environment (set per feature by
-# `just sandbox::agent-feature`).
+# NATS_URL comes from the environment (set by the sandbox).
 
 # Compile the project. Fails fast on a type error, same as CI would.
 build:
@@ -40,19 +39,6 @@ lint:
 # Run the application.
 run *args:
     cargo run {{args}}
-
-# Apply pending database migrations against DATABASE_URL.
-migrate:
-    sqlx migrate run
-
-# Revert the most recent migration.
-migrate-revert:
-    sqlx migrate revert
-
-# Regenerate sqlx's offline query cache (.sqlx/), needed after changing a
-# query macro so builds succeed without a live database connection.
-sqlx-prepare:
-    cargo sqlx prepare
 
 # Everything CI runs, in one command. Both a human before pushing and the
 # agent before calling a task "done" should run this rather than guessing
