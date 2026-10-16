@@ -7,5 +7,5 @@ name = "api"
 version = "0.1.0"
 
 [[package]]
-name = "rib"
+name = "nib"
 version = "0.1.0"
