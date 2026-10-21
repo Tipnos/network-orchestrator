@@ -24,9 +24,9 @@ All services are written in Rust and live in one Cargo workspace.
 
 **Structs are encoded as maps.** The codec uses `rmp_serde::to_vec_named`, which writes field names as map keys. Positional array encoding (`rmp_serde::to_vec`) is forbidden: with it, adding or reordering a field silently corrupts every reader.
 
-**Source of truth.** The schema of a value or message is the Rust type that defines it, in the owning service's `api` crate. Every such type derives `Serialize`, `Deserialize` and `JsonSchema` (from `schemars`).
+**Source of truth.** The schema of a value or message is the Rust type that defines it, in the owning service's `types` crate. Every such type derives `Serialize`, `Deserialize` and `JsonSchema` (from `schemars`).
 
-**JSON Schema files.** A JSON Schema is generated from each type and committed under `crates/<service>/api/schema/`, named by type and major version (`link.v1.json`). These files are generated, never edited by hand. They are the readable contract that client teams review.
+**JSON Schema files.** A JSON Schema is generated from each type and committed under `crates/<service>/types/schema/`, named by type and major version (`link.v1.json`). These files are generated, never edited by hand. They are the readable contract that client teams review.
 
 **Data model rules.** So that the JSON Schema accurately describes what MessagePack carries:
 
@@ -36,7 +36,7 @@ All services are written in Rust and live in one Cargo workspace.
 - types never use `#[serde(deny_unknown_fields)]`: readers ignore fields they do not know;
 - fields added after a type's first release are optional, with `#[serde(default)]`.
 
-**Versioning.** Each major version of a schema lives in its own module of the `api` crate (`v1`, `v2`), side by side. During a migration the owner writes both versions until no client reads the old one.
+**Versioning.** Each major version of a schema lives in its own module of the `types` crate (`v1`, `v2`), side by side. During a migration the owner writes both versions until no client reads the old one.
 
 **Compatibility check.** A CI step, `cargo xtask schema-check`, regenerates every schema and compares it with the committed file:
 
@@ -72,4 +72,4 @@ All services are written in Rust and live in one Cargo workspace.
 - Implement the codec in the `nib` crate, with a test proving that adding an optional field keeps old readers working.
 - Implement `cargo xtask schema-check`.
 - Add the data model rules to `specs/constitution.md`.
-- Record the service-owned `api` crate model and side-by-side versioning in its own ADR.
+- Record the service-owned `types` crate model and side-by-side versioning in its own ADR.

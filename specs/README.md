@@ -14,11 +14,11 @@ Agents and contributors start from the root `AGENTS.md`, which says which of the
 | Glossary | `specs/glossary.md` | everyone |
 | Interface specs | `specs/interfaces/*.md` | everyone; no single team |
 | ADRs | `specs/decisions/NNNN-*.md` | everyone |
-| API spec of a service | `crates/<service>/api/spec/api.md` | the service's team |
+| Types spec of a service | `crates/<service>/types/spec/types.md` | the service's team |
 | Service spec | `crates/<service>/service/spec/spec.md` | the service's team |
 | Design doc | `crates/<service>/service/spec/design.md` | the service's team |
 
-Service, API and design documents live next to their code so that each team owns them and each service's context stays self-contained. They are still listed below.
+Service, Types and design documents live next to their code so that each team owns them and each service's context stays self-contained. They are still listed below.
 
 ## Conventions
 
@@ -28,7 +28,7 @@ Every spec starts with:
 
 ```yaml
 ---
-id: topology-api          # unique, kebab-case; prefix for requirement IDs (TOPOLOGY-API-001)
+id: topology-types        # unique, kebab-case; prefix for requirement IDs (TOPOLOGY-TYPES-001)
 version: 1.0.0            # semver, see below
 status: draft             # draft | review | stable | deprecated
 owner: <team>             # or "shared" for documents in specs/
@@ -73,12 +73,12 @@ Every version change has an entry in the spec's `CHANGELOG.md`.
 
 ### Services
 
-| Service | Team | API spec | Service spec | Status |
+| Service | Team | Types spec | Service spec | Status |
 |---|---|---|---|---|
 | _none yet_ | | | | |
 
 <!-- Example row:
-| topology | <team> | [api.md](../crates/topology/api/spec/api.md) v1.2.0 | [spec.md](../crates/topology/service/spec/spec.md) v1.0.3 | stable |
+| topology | <team> | [types.md](../crates/topology/types/spec/types.md) v1.2.0 | [spec.md](../crates/topology/service/spec/spec.md) v1.0.3 | stable |
 -->
 
 ### Shared crates
