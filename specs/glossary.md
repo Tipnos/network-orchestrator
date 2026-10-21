@@ -22,7 +22,9 @@ Shared vocabulary for all specs, design docs and ADRs in this repository.
 
 **Constitution**: The project-wide rules every service and crate must follow, such as the error-handling policy, MSRV and `unsafe` policy. See `specs/constitution.md`.
 
-**Design doc**: A `design.md` file describing how a module implements its spec: types, traits, algorithms, data layout. Non-normative; it may change as long as the spec still holds.
+**Design doc**: A `design.md` file recording the significant choices behind how a module implements its spec, and why they were made. By default it does not repeat what the code shows; code-level details are added only when they are worth it, after a suggestion is accepted. Non-normative; it may change as long as the spec still holds.
+
+**Intent**: The desired state a client declares through the api service, such as how many servers a tenant needs. The system converges the network towards it.
 
 **Interface spec**: A spec in `specs/interfaces/` describing a contract no single team owns, such as the NIB's general semantics. Changes to it affect every service.
 
@@ -39,3 +41,5 @@ Shared vocabulary for all specs, design docs and ADRs in this repository.
 **Service crate**: The crate `crates/<service>/service`, holding a service's implementation and its service spec and design doc. Private to the owning team; no other service may depend on it.
 
 **Spec**: A normative document stating what must hold, as seen from outside a module: behavior, invariants, error model and limits. Service specs, types specs and interface specs are all specs. Versioned with semver.
+
+**Tenant**: A logically isolated network that belongs to exactly one client and connects a given number of servers. It is identified by a name the client chooses.

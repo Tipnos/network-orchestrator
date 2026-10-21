@@ -8,7 +8,7 @@
 
 ## Context
 
-All microservices share a common state store, the NIB (Resource Information Base), in the spirit of the Orion SDN control plane. Services read and write NIB tables and react to changes in them, so the substrate must provide:
+All microservices share a common state store, the NIB (Network Information Base), in the spirit of the Orion SDN control plane. Services read and write NIB tables and react to changes in them, so the substrate must provide:
 
 - durable, replicated key-value storage for NIB tables
 - change notifications (watch) that a service can resume from a known revision after a restart

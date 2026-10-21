@@ -1,0 +1,12 @@
+# Which team owns which part of the repository. See AGENTS.md, "Service independence".
+# Later lines take precedence. The repository has a single maintainer for now;
+# replace the owners below with teams once they exist (GitHub teams need an organization).
+
+# Shared: specs, ADRs, tooling and workspace configuration
+*                   @Tipnos
+
+# Services
+/crates/api/        @Tipnos
+
+# Shared crates
+/crates/nib/        @Tipnos

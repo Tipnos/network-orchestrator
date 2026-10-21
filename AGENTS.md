@@ -60,7 +60,7 @@ Each kind of document has one job:
 - **Types spec** (`types/spec/types.md`): what a service promises its clients. Normative.
 - **Service spec** (`service/spec/spec.md`): what the service must do, as seen from outside it. Normative.
 - **Interface spec** (`specs/interfaces/*.md`): contracts no single team owns, such as the NIB's semantics. Normative.
-- **Design doc** (`design.md`): how a module meets its spec. Non-normative; may change freely while the spec still holds.
+- **Design doc** (`design.md`): the significant choices behind a module's implementation and why they were made, such as the libraries used, the overall approach and constraints not visible in the code. By default it does not repeat what the code shows: no function names, signatures or code snippets, which would drift from the code. If you think a code-level detail is worth recording, suggest it to the user instead of writing it. Non-normative; may change freely while the spec still holds.
 - **ADR** (`specs/decisions/NNNN-*.md`): why a significant decision was made.
 - **docs/**: explanations for humans. Never treat them as requirements; if they contradict a spec, the spec wins.
 
@@ -127,9 +127,22 @@ cargo xtask spec-check       # requirement ↔ test traceability (when added)
 
 Where a requirement is a property or invariant, prefer a checking tool over example tests: `proptest` for properties, `loom` for concurrency invariants, `kani` for bounded model checking.
 
+## Working with the user
+
+The user is learning while building this project and must understand and own every decision.
+
+- When a task needs a decision the specs do not settle, do not pick silently. State the question, give two or three options with their trade-offs, recommend one, and let the user decide.
+- Take one decision at a time, and keep each change small enough to review on its own.
+- Flag every assumption you make to fill a gap, so the user can challenge it.
+- When something is unclear or missing from the specs, ask rather than invent. A question you had to ask usually means a spec or an `AGENTS.md` should say more: suggest the fix.
+
+## Commits and pull requests
+
+Commit messages and pull request descriptions must not include `Co-Authored-By` lines or any other AI attribution.
+
 ## Before you finish
 
-- [ ] Build, tests, clippy, fmt and the `xtask` checks pass.
+- [ ] Build, tests, clippy, fmt and the `xtask` checks pass. The `xtask` checks are not written yet: skip them until they exist, and do not write them unless asked.
 - [ ] Observable behavior changes are reflected in the spec, with a version bump and changelog entry.
 - [ ] New or changed requirements have tests that reference their IDs.
 - [ ] API changes are compatible, or live in a new major version module; schemas are regenerated.
