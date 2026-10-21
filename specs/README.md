@@ -75,7 +75,7 @@ Every version change has an entry in the spec's `CHANGELOG.md`.
 
 | Service | Team | Types spec | Service spec | Status |
 |---|---|---|---|---|
-| _none yet_ | | | | |
+| api | api-team | — | [spec.md](../crates/api/service/spec/spec.md) v0.1.0 | draft |
 
 <!-- Example row:
 | topology | <team> | [types.md](../crates/topology/types/spec/types.md) v1.2.0 | [spec.md](../crates/topology/service/spec/spec.md) v1.0.3 | stable |
@@ -85,12 +85,12 @@ Every version change has an entry in the spec's `CHANGELOG.md`.
 
 | Crate | Spec | Design | Status | Version |
 |---|---|---|---|---|
-| `nib` | [spec.md](../crates/nib/spec/spec.md) | [design.md](../crates/nib/spec/design.md) | draft | 0.1.0 |
+| `nib` | [spec.md](../crates/nib/service/spec/spec.md) | [design.md](../crates/nib/service/spec/design.md) | draft | 0.1.0 |
 
 ### Architecture decisions
 
 | ADR | Title | Status |
 |---|---|---|
 | [0001](decisions/0001-record-architecture-decisions.md) | Record architecture decisions | Accepted |
-| [0002](decisions/0002-nats-substrate.md) | Use NATS JetStream as the substrate for the NIB and inter-service messaging | Accepted |
+| [0002](decisions/0002-nats-nib.md) | Use NATS JetStream as the substrate for the NIB and inter-service messaging | Accepted |
 | [0003](decisions/0003-messagepack-json-schema.md) | Encode messages with MessagePack and describe them with JSON Schema generated from Rust types | Accepted |
